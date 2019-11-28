@@ -1,4 +1,4 @@
-classdef FiveLinkAnimator_verPC < Animator.AbstractAnimator
+classdef FiveLinkAnimator_verPC < MyAnimator.AbstractAnimator
     properties
 %         leg1Color = 'r';
         leg1Color = [0.8500    0.3250    0.0980] * 0.3 + 0.7;
@@ -36,8 +36,8 @@ classdef FiveLinkAnimator_verPC < Animator.AbstractAnimator
     
     methods
         function obj = FiveLinkAnimator_verPC(t, q, target, varargin)
-%                 obj = obj@Animator.AbstractAnimator();
-                obj = obj@Animator.AbstractAnimator(varargin{1}); % Calling super constructor
+%                 obj = obj@MyAnimator.AbstractAnimator();
+                obj = obj@MyAnimator.AbstractAnimator(varargin{1}); % Calling super constructor
     
             obj.q_all = q;
             obj.t_all = t;

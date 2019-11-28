@@ -92,6 +92,6 @@ function Animate(t_hist, y_hist)
     anim.isLooping = false;
     anim.updateWorldPosition = true;
     anim.endTime = t_hist(end);
-    conGUI = Animator.AnimatorControls();
+    conGUI = MyAnimator.AnimatorControls();
     conGUI.anim = anim;
 end
