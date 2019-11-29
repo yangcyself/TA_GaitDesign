@@ -15,10 +15,10 @@ addpath([potdir s 'spotopt/util']);
 addpath([potdir s 'mint']);
 addpath([potdir s 'mss']);
 fprintf('\n compiling the binaries...')
-cd('mex');
-mex spot_gset.c 
-mex spot_mex_msspoly_check_canonical.cpp
-mex spot_mex_msspoly_make_canonical_combine_powers.cpp spot_mex_helpers.cpp
-mex spot_mex_msspoly_make_canonical_combine_coeffs.cpp spot_mex_helpers.cpp
-cd('..');
+% cd('mex');
+% mex spot_gset.c 
+% mex spot_mex_msspoly_check_canonical.cpp
+% mex spot_mex_msspoly_make_canonical_combine_powers.cpp spot_mex_helpers.cpp
+% mex spot_mex_msspoly_make_canonical_combine_coeffs.cpp spot_mex_helpers.cpp
+% cd('..');
 fprintf('\n Done.\n')
