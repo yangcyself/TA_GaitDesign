@@ -3,7 +3,7 @@
 ## experiments
 
 
-|  mu  | their controller|their result | our controller | our result
+|  $\mu$  | their controller|their result | our controller | our result
 | ---- | ---- | ---- | ---- | ---- |
 | 0.55 |  105, 0.6|   |   0.05,0.02  |yes 5/5|
 | 0.30 |  105, 0.6|   |   0.05,0.02  |yes 5/5|
@@ -12,9 +12,18 @@
 | 0.10 |  105, 0.6|   |   0.05,0.02  |walk long double stand  5/5|
 | 0.05 |  105, 0.6|   |   0.05,0.02  |double stand 1/5|
 |      |      |      |
-|      |      |      |
 > Their controller is the Kp and Kd, our controller is their Kp and Kd adding feedforward with $q$ and $dq\
-> The value in result is the amount of steps in experiment
+> The value in result is the amount of steps in experiment\
+> The above result is get under the condition that zero react force above 1e-2
+
+**changed the no-force height to 1e-5**
+
+|  $\mu$  | their controller|their result | our controller | our result
+| ---- | ---- | ---- | ---- | ---- |
+| 0.55 |  105, 0.6|   |   0.05,0.02  |yes 5/5|
+| 0.15 |  105, 0.6|   |   0.05,0.02  |walk long double stand 3/5|
+
+
 
 ## install 
 

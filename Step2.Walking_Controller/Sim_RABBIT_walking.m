@@ -19,9 +19,9 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.15;
-steps = 5;
-MaxTime = 5;
+mu = 0.25;
+steps = 20;
+MaxTime = 10;
 %% If no IC is specified, pick one
 if nargin == 0
     
@@ -120,19 +120,6 @@ while current_time < MaxTime - 1e-3
 %                         break;
                     end
                     y0 = ResetMap( yout(end,:).' );
-                    
-%                     if (y0(3)+y0(4)+y0(5)/2 > pi)
-%                         err = 3;
-%                         [tout, yout, ie] = Sim_RABBIT_route4_PD_v2_untilfail( y0(1:7), y0(8:14), p1, p2 );
-%                         Ntrans = Ntrans + 1;
-%                         info(Ntrans).time = tout + current_time;
-%                         info(Ntrans).state = yout;
-%                         info(Ntrans).ie = ie;
-%                         info(Ntrans).k = [p1, p2];
-%                         t_hist = [t_hist; info(Ntrans).time];
-%                         y_hist = [y_hist; info(Ntrans).state];
-%                         break;
-%                     end
                     if (p_foot2(1) > p2 + 0.05)
                         err = 1;
                     elseif (p_foot2(1) < p2 - 0.05)
@@ -243,13 +230,7 @@ end
         gc_ddp = J*ddq+dJ*dq;
         Pright = p_RightToe(q);
         count = 1;
-%         while( ~(Pright(3)>1e-6 || gc_ddp(2)>=0 ) && count<1000)
-%             count = count*2;
-%             ddq = ddq - count*gc_ddp(2)*J(2,:)'; % force the rigid constraint
-%             gc_ddp = J*ddq+dJ*dq;
-%             Pright = p_RightToe(q);
-%         end
-%         assert(Pright(3)>1e-6 || gc_ddp(2)>=0) % assert the rigid model
+
         dydt = [ dq; ddq ];
     end
 
@@ -496,12 +477,6 @@ end
             % solve for the new equition
             reFdir = sign(reF(1)); % 
             sol = solve_slip(M,F,B,J,dJ,tau,dq,reFdir,mu);
-            if(sol(9) * sol_(9)<0)
-                aaaaa = 1; % in this case, assume the solve_slip is correct, and make the force to zero
-            end
-            if(sol(8) * sol_(8)<0)
-               caocaocao = 1; 
-            end
             ddq = sol(1:7);
         end
         
