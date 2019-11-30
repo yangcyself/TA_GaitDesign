@@ -19,7 +19,7 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.3;
+mu = 0.15;
 steps = 5;
 MaxTime = 5;
 %% If no IC is specified, pick one
@@ -243,13 +243,13 @@ end
         gc_ddp = J*ddq+dJ*dq;
         Pright = p_RightToe(q);
         count = 1;
-        while( ~(Pright(3)>1e-3 || gc_ddp(2)>=0 ) && count<1000)
-            count = count*2;
-            ddq = ddq - count*gc_ddp(2)*J(2,:)'; % force the rigid constraint
-            gc_ddp = J*ddq+dJ*dq;
-            Pright = p_RightToe(q);
-        end
-        assert(Pright(3)>1e-3 || gc_ddp(2)>=0) % assert the rigid model
+%         while( ~(Pright(3)>1e-6 || gc_ddp(2)>=0 ) && count<1000)
+%             count = count*2;
+%             ddq = ddq - count*gc_ddp(2)*J(2,:)'; % force the rigid constraint
+%             gc_ddp = J*ddq+dJ*dq;
+%             Pright = p_RightToe(q);
+%         end
+%         assert(Pright(3)>1e-6 || gc_ddp(2)>=0) % assert the rigid model
         dydt = [ dq; ddq ];
     end
 
@@ -289,8 +289,8 @@ end
 %             stanceP(3) - 1e-4                       % The touch-down of stance foot
             ];
         
-%         if (t < 1e-3)
-        if (t < 0.05)
+        if (t < 1e-3)
+%         if (t < 0.05)
             value = nan(5,1);
         end
         if (true || t < 1e-2) % !!
@@ -514,7 +514,7 @@ end
         
         reF(2) = max(0,reF(2));
         reF(1) = max(min(mu*reF(2),reF(1)),-mu*reF(2));
-        if (Pright(3) >1e-2)
+        if (Pright(3) >1e-5)
            reF = 0*reF; 
         end
     end
