@@ -88,7 +88,7 @@ while current_time < MaxTime - 1e-3
         err = 8;
         break;
     end
-    
+%     Ntrans = 1;
     switch Ntrans
         case 1      % either 1-TD, 2-MSFW, 3-MSBW, or others
             switch ie
@@ -98,22 +98,22 @@ while current_time < MaxTime - 1e-3
                     [ p_foot2 ] = Joint2LeftToePos( yout(end,3:7).', params );
                     if (p_foot2(1) < 0)
                         err = 4;
-                        break;
+%                         break;
                     end
                     y0 = ResetMap( yout(end,:).' );
                     
-                    if (y0(3)+y0(4)+y0(5)/2 > pi)
-                        err = 3;
-                        [tout, yout, ie] = Sim_RABBIT_route4_PD_v2_untilfail( y0(1:7), y0(8:14), p1, p2 );
-                        Ntrans = Ntrans + 1;
-                        info(Ntrans).time = tout + current_time;
-                        info(Ntrans).state = yout;
-                        info(Ntrans).ie = ie;
-                        info(Ntrans).k = [p1, p2];
-                        t_hist = [t_hist; info(Ntrans).time];
-                        y_hist = [y_hist; info(Ntrans).state];
-                        break;
-                    end
+%                     if (y0(3)+y0(4)+y0(5)/2 > pi)
+%                         err = 3;
+%                         [tout, yout, ie] = Sim_RABBIT_route4_PD_v2_untilfail( y0(1:7), y0(8:14), p1, p2 );
+%                         Ntrans = Ntrans + 1;
+%                         info(Ntrans).time = tout + current_time;
+%                         info(Ntrans).state = yout;
+%                         info(Ntrans).ie = ie;
+%                         info(Ntrans).k = [p1, p2];
+%                         t_hist = [t_hist; info(Ntrans).time];
+%                         y_hist = [y_hist; info(Ntrans).state];
+%                         break;
+%                     end
                     if (p_foot2(1) > p2 + 0.05)
                         err = 1;
                     elseif (p_foot2(1) < p2 - 0.05)
@@ -129,6 +129,12 @@ while current_time < MaxTime - 1e-3
                 case 3
                     err = 6;
                     break;
+                case 6
+                    y0 = yout(end,:).';
+                    s0 = Find_s0( y0 );
+                case 7
+                    y0 = yout(end,:).';
+                    s0 = Find_s0( y0 );
                 otherwise
                     err = 8;
                     break;
@@ -163,7 +169,7 @@ end
 
 %% Plot trajectories & animation
 
-% PlotTraj();
+PlotTraj();
 
 if plot_flag == 1
     Animate();
@@ -177,6 +183,7 @@ end
     function [dydt] = SecondOrderODE( y, tau )
         mu = 0.9;
         q   = y(1:7);
+        righttoe = p_RightToe(q);
         dq  = y(8:14);
 
         M   = rabbit.calcMassMatrix( q );
@@ -188,35 +195,71 @@ end
         J(2,:)  = [];
         dJ(2,:) = [];
 
-        Mat = [ M, -J.';
-                J, zeros(2) ];
-        vec = [ F + B*tau
-                -dJ * dq ];
-
-        sol = Mat \ vec;
+        sol = solve_holonomial(M,F,B,J,dJ,tau,dq);
+        sol_ = sol;
         ddq = sol(1:7);
         
         reF = sol(8:9);% the reaction force from the ground
         % add saturation and put it back to compute ddq
+       
+        if (reF(2)>0 && mu*reF(2)<abs(reF(1))) % not in friction cone
+            % solve for the new equition
+            reFdir = sign(reF(1));
+            sol = solve_slip(M,F,B,J,dJ,tau,dq,reFdir,mu);
+            if(sol(9) * sol_(9)<0)
+                aaaaa = 1; % in this case, assume the solve_slip is correct, and make the force to zero
+            end
+            ddq = sol(1:7);
+        end
+
+        reF = sol(8:9);
         reF(2) = max(0,reF(2));
         reF(1) = max(min(mu*reF(2),reF(1)),-mu*reF(2));
-%         if mu*reF(2)<abs(reF(1)) % not in friction cone
-%             reF(1) = sign(reF(1))*mu*reF(2);
-%         end
+        
+        if(p_LeftToe(q)>1e-6)
+            reF = zeros(2,1);
+        end
         
         ddq = M\(F+B*tau + J.'*reF); % solve again the dynamics under the saturated force
+        
         dydt = [ dq; ddq ];
+    end
+
+    function sol = solve_holonomial(M,F,B,J,dJ,tau,dq)
+        Mat = [ M, -J.';
+                J, zeros(2) ];
+        vec = [ F + B*tau
+                -dJ * dq ];
+        sol = Mat \ vec;
+    end
+
+    function sol = solve_slip(M,F,B,J,dJ,tau,dq,reFdir,mu)
+        
+        Mat = [M, -J.'; % dynamics constraint
+               J(2,:), zeros(1,2);
+               zeros(1,7), reFdir, -mu];
+        vec = [ F + B*tau;
+            -dJ * dq;0 ];
+        vec(8) = []; % drop the dx = 0's constraint
+        assert(rank(Mat)==9);
+        sol = Mat \ vec;
     end
 
     function [value, isterminal, direction] = EvtFunc( t, y )
         q = y(1:7);
         dq = y(8:end);
+        stanceP = p_RightToe(q);
+        swingP = p_LeftToe(q);
         value = [ ...
-            u_leftFootHeight_RightStance( q )       % touch-down
+%             u_leftFootHeight_RightStance( q )       % touch-down
+            swingP(3)                               % touch-down
             q(3) + q(4) + q(5)/2 - pi               % mid-stance, forward
             q(3) + q(4) + q(5)/2 - pi               % mid-stance, backward
             dq(3) + dq(4) + dq(5)/2                 % dth = 0
-            q(3) + q(4) + q(5)/2 - 3*pi/2 ];        % forward
+            q(3) + q(4) + q(5)/2 - 3*pi/2           % forward
+%             stanceP(3) - 1e-4                       % The lift-up of the support leg
+%             stanceP(3) - 1e-4                       % The touch-down of stance foot
+            ];
         
         if (t < 1e-3)
             value = nan(5,1);
@@ -228,7 +271,7 @@ end
             value(4) = nan;
         end
         isterminal = ones( 5, 1 );
-        direction = [ -1; 1; -1; -1; 1 ];
+        direction = [ -1; 1; -1; -1; 1 ];%1;-1];
     end
 
     function s0 = Find_s0( y )
@@ -287,8 +330,8 @@ end
         q = y(1:7);
         dq = y(8:14);
         
-        Kp = 500 *[ 10; 1; 10; 1 ];
-        Kd = 0.5 * [ 100; 10; 100; 10 ];
+        Kp = 50 *[ 10; 1; 10; 1 ];
+        Kd = 0.05 * [ 100; 10; 100; 10 ];
         u_pd = -Kp .* (q(4:end)-q_des(2:end)) - Kd .* (dq(4:end) - dq_des(2:end));
         
         % controller offset
