@@ -19,7 +19,7 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-
+mu = 0.5;
 %% If no IC is specified, pick one
 if nargin == 0
     
@@ -55,7 +55,7 @@ y0 = [ q0; dq0 ];
 
 MaxTime = 5;
 Dyn = @( t, y ) SecondOrderODE( y, PD_controller( t, y ) );
-
+Fyn = @( t, y ) F_ext( y, PD_controller( t, y ) );
 % Integrate ODE forward
 current_time = 0;
 t_rel_hist = [];
@@ -69,10 +69,27 @@ s0 = Find_s0( y0 );
 Ntrans = 0;     % number of transitions
 err = 0;
 steps = 5;
+Ext_F = [];
+tout_ = [];
 while current_time < MaxTime - 1e-3
     
     options = odeset('Events', @EvtFunc, 'RelTol', 1e-7, 'AbsTol', 1e-7 );
     [tout,yout,te,ye,ie] = ode45(Dyn,[0,5],y0,options); %te: time of the event, ye solution at the time of the event, ie index of the triggered event
+    
+    % calculate force
+    last = length(Ext_F);
+    Ext_F = [Ext_F,zeros(2,length(tout))];
+    
+    if isempty(tout_)
+        t_last = 0;
+    else
+        t_last = tout_(end);
+    end
+    tout_ = [tout_;tout+t_last];
+    for jj = 1:length(tout)
+        Ext_F(:,jj+last) = Fyn(tout(jj),yout(jj,:)');
+    end
+    
     
     Ntrans = Ntrans + 1;
     info(Ntrans).time = tout + current_time;
@@ -120,10 +137,10 @@ while current_time < MaxTime - 1e-3
                         err = 2;
                     end
                 case 2
-                    t_hist = [];
-                    y_hist = [];
+%                     t_hist = []; # why?
+%                     y_hist = [];
                     Ntrans = 0;
-                    current_time = 0;
+%                     current_time = 0;
                     y0 = yout(end,:).';
                     s0 = Find_s0( y0 );
                 case 3
@@ -181,7 +198,7 @@ end
 %% Plot trajectories & animation
 
 PlotTraj();
-
+figure; plot(tout_,Ext_F'); title('Force')
 if plot_flag == 1
     Animate();
 %     PlotTraj;
@@ -192,45 +209,20 @@ end
 %% ======================  Functions  =======================
     
     function [dydt] = SecondOrderODE( y, tau )
-        mu = 0.9;
         q   = y(1:7);
         righttoe = p_RightToe(q);
         dq  = y(8:14);
-
+        
         M   = rabbit.calcMassMatrix( q );
         F   = rabbit.calcDriftVector( q, dq );
         B   = [zeros(3,4); 50 * eye(4)];
         J   = Jh_RightToe_RightStance( q );
         dJ  = dJh_RightToe_RightStance( q, dq );
-
         J(2,:)  = [];
         dJ(2,:) = [];
-
-        sol = solve_holonomial(M,F,B,J,dJ,tau,dq);
-        sol_ = sol;
-        ddq = sol(1:7);
         
-        reF = sol(8:9);% the reaction force from the ground
-        % add saturation and put it back to compute ddq
-       
-        if (reF(2)>0 && mu*reF(2)<abs(reF(1))) % not in friction cone
-            % solve for the new equition
-            reFdir = sign(reF(1));
-            sol = solve_slip(M,F,B,J,dJ,tau,dq,reFdir,mu);
-            if(sol(9) * sol_(9)<0)
-                aaaaa = 1; % in this case, assume the solve_slip is correct, and make the force to zero
-            end
-            ddq = sol(1:7);
-        end
-
-        reF = sol(8:9);
-        reF(2) = max(0,reF(2));
-        reF(1) = max(min(mu*reF(2),reF(1)),-mu*reF(2));
-        
-        if(p_LeftToe(q)>1e-6)
-            reF = zeros(2,1);
-        end
-        
+        reF = F_ext(y,tau);
+               
         ddq = M\(F+B*tau + J.'*reF); % solve again the dynamics under the saturated force
         
         dydt = [ dq; ddq ];
@@ -276,7 +268,7 @@ end
         if (t < 0.05)
             value = nan(5,1);
         end
-        if (t < 1e-2)
+        if (false || t < 1e-2) % !!
             value(4) = nan;
         end
         if (q(3) + q(4) + q(5)/2 < pi)
@@ -435,5 +427,46 @@ end
         anim.endTime = t_hist(end);
         conGUI = MyAnimator.AnimatorControls();
         conGUI.anim = anim;
+    end
+
+    function [reF] = F_ext( y, tau )
+        q   = y(1:7);
+        dq  = y(8:14);
+        M   = rabbit.calcMassMatrix( q );
+        F   = rabbit.calcDriftVector( q, dq );
+        B   = [zeros(3,4); 50 * eye(4)];
+        J   = Jh_RightToe_RightStance( q );
+        dJ  = dJh_RightToe_RightStance( q, dq );
+        J(2,:)  = [];
+        dJ(2,:) = [];
+
+        sol = solve_holonomial(M,F,B,J,dJ,tau,dq);
+        sol_ = sol;
+        ddq = sol(1:7);
+        
+        reF = sol(8:9);% the reaction force from the ground
+        % add saturation and put it back to compute ddq
+       
+%         if (reF(2)>0 && mu*reF(2)<abs(reF(1))) % not in friction cone
+%             % solve for the new equition
+%             reFdir = sign(reF(1));
+%             sol = solve_slip(M,F,B,J,dJ,tau,dq,reFdir,mu);
+%             if(sol(9) * sol_(9)<0)
+%                 aaaaa = 1; % in this case, assume the solve_slip is correct, and make the force to zero
+%             end
+%             if(sol(8) * sol_(8)<0)
+%                caocaocao = 1; 
+%             end
+%             ddq = sol(1:7);
+%         end
+        
+        Pright = p_RightToe(q);
+        
+        reF = sol(8:9);
+        reF(2) = max(0,reF(2));
+        reF(1) = max(min(mu*reF(2),reF(1)),-mu*reF(2));
+        if (Pright(3) >1e-2)
+           reF = 0*reF; 
+        end
     end
 end
