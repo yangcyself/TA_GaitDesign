@@ -1,5 +1,5 @@
 function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot_flag )
-
+    close all;
 % ============================================
 % walking controller
 % 
@@ -19,7 +19,7 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.6;
+mu = 0.55;
 %% If no IC is specified, pick one
 if nargin == 0
     
@@ -53,7 +53,7 @@ th_len_m = th_len_fit( km(:) );
 %% Setup simulation
 y0 = [ q0; dq0 ];
 
-MaxTime = 5;
+MaxTime = 10;
 Dyn = @( t, y ) SecondOrderODE( y, PD_controller( t, y ) );
 Fyn = @( t, y ) F_ext( y, PD_controller( t, y ) );
 % Integrate ODE forward
@@ -68,7 +68,7 @@ s0 = Find_s0( y0 );
 
 Ntrans = 0;     % number of transitions
 err = 0;
-steps = 5;
+steps = 20;
 Ext_F = [];
 tout_ = [];
 while current_time < MaxTime - 1e-3
@@ -158,6 +158,19 @@ while current_time < MaxTime - 1e-3
             end
         case 2      % either 2-MSFW, 4-BW, 5-FW, or others
             switch ie
+                case 1 % the robot contacted the ground again
+                    [ p_foot2 ] = Joint2LeftToePos( yout(end,3:7).', params );
+                    if (p_foot2(1) < 0)
+                        err = 4;
+%                         break;
+                    end
+                    y0 = ResetMap( yout(end,:).' );
+                    s0 = Find_s0( y0 );
+                    steps = steps -1;
+                    if(steps <=0);
+                        break;
+                    end
+                    Ntrans = 0;
                 case 2
                     y0 = yout(end,:).';
                 case 4
@@ -339,14 +352,22 @@ end
     
     function [u] = PD_controller( ~, y )
         [ q_des, dq_des ] = FindRefTraj( y );
-        
+        t = t;
         % PD
         q = y(1:7);
         dq = y(8:14);
+
+        Jr = Jh_RightToe_RightStance(q);
+        velr = Jr*dq
         
-        % Kp 50 Kd 0.05 -> »ØÍË
-        Kp = 100 *[ 10; 1; 10; 1 ];
-        Kd = 0.1 * [ 100; 10; 100; 10 ];
+        if abs(velr(1))>1e-2
+            q_des(4:5) = q_des(4:5).*[1+0.05*velr(1);1+0.05*velr(1)];
+            dq_des(4:5) = dq_des(4:5).*[1+0.02*velr(1);1+0.02*velr(1)];
+        end
+        % Kp 50 Kd 0.05 -> step back
+        % 105 0.5 works better than 50 0.05
+        Kp = 105 *[ 10; 1; 10; 1 ];
+        Kd = 0.6 * [ 100; 10; 100; 10 ];
         u_pd = -Kp .* (q(4:end)-q_des(2:end)) - Kd .* (dq(4:end) - dq_des(2:end));
         
         % controller offset
