@@ -68,7 +68,7 @@ s0 = Find_s0( y0 );
 
 Ntrans = 0;     % number of transitions
 err = 0;
-
+steps = 5;
 while current_time < MaxTime - 1e-3
     
     options = odeset('Events', @EvtFunc, 'RelTol', 1e-7, 'AbsTol', 1e-7 );
@@ -157,7 +157,18 @@ while current_time < MaxTime - 1e-3
         case 3      % either 1-TD, or others
             switch ie
                 case 1
-                    break;
+                    [ p_foot2 ] = Joint2LeftToePos( yout(end,3:7).', params );
+                    if (p_foot2(1) < 0)
+                        err = 4;
+%                         break;
+                    end
+                    y0 = ResetMap( yout(end,:).' );
+                    s0 = Find_s0( y0 );
+                    steps = steps -1;
+                    if(steps <=0);
+                        break;
+                    end
+                    Ntrans = 0;
                 otherwise
                     err = 8;
                     break;
@@ -261,7 +272,8 @@ end
 %             stanceP(3) - 1e-4                       % The touch-down of stance foot
             ];
         
-        if (t < 1e-3)
+%         if (t < 1e-3)
+        if (t < 0.05)
             value = nan(5,1);
         end
         if (t < 1e-2)
@@ -330,8 +342,9 @@ end
         q = y(1:7);
         dq = y(8:14);
         
-        Kp = 50 *[ 10; 1; 10; 1 ];
-        Kd = 0.05 * [ 100; 10; 100; 10 ];
+        % Kp 50 Kd 0.05 -> »ØÍË
+        Kp = 100 *[ 10; 1; 10; 1 ];
+        Kd = 0.1 * [ 100; 10; 100; 10 ];
         u_pd = -Kp .* (q(4:end)-q_des(2:end)) - Kd .* (dq(4:end) - dq_des(2:end));
         
         % controller offset

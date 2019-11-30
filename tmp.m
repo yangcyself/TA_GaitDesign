@@ -5,15 +5,17 @@ dq0 = [1.43439702458653,0.114754525860054,-0.0994226913800137,2.66689445269301,-
 P = [1.5150    0.4365];
 
 [~, ~, info, err] = Sim_RABBIT_walking( q0, dq0, P(1), P(2), 0 );
-if length(info) == 1
-        t_hist_tmp = [ info(1).time ];
-        y_hist_tmp = [ info(1).state ];
-        error('length(info) = 1');
-    else
-        t_hist_tmp = [ info(1).time; info(2).time ];
-        y_hist_tmp = [ info(1).state; info(2).state ];
-        q0 = y_hist_tmp(end,1:7).';
-        dq0 = y_hist_tmp(end,8:end).';
+for nsteps = 1 : 15
+    if length(info) == 1
+            t_hist_tmp = [ info(1).time ];
+            y_hist_tmp = [ info(1).state ];
+            error('length(info) = 1');
+        else
+            t_hist_tmp = [ info(1).time; info(2).time ];
+            y_hist_tmp = [ info(1).state; info(2).state ];
+            q0 = y_hist_tmp(end,1:7).';
+            dq0 = y_hist_tmp(end,8:end).';
+    end
 end
 %%
 Animate(t_hist_tmp, y_hist_tmp);
