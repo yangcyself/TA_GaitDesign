@@ -1,5 +1,13 @@
 # Slip control
 
+## experiments
+
+|  mu  | their controller | our controller |
+| ---- | ---- | ---- |
+| 0.55 |      |  yes    |
+|      |      |      |
+|      |      |      |
+
 ## install 
 
 There are some cpp binaries that needs to be compiled in specific enviroments.

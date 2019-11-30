@@ -19,7 +19,9 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.55;
+mu = 0.3;
+steps = 5;
+MaxTime = 5;
 %% If no IC is specified, pick one
 if nargin == 0
     
@@ -53,7 +55,7 @@ th_len_m = th_len_fit( km(:) );
 %% Setup simulation
 y0 = [ q0; dq0 ];
 
-MaxTime = 10;
+
 Dyn = @( t, y ) SecondOrderODE( y, PD_controller( t, y ) );
 Fyn = @( t, y ) F_ext( y, PD_controller( t, y ) );
 % Integrate ODE forward
@@ -68,7 +70,7 @@ s0 = Find_s0( y0 );
 
 Ntrans = 0;     % number of transitions
 err = 0;
-steps = 20;
+
 Ext_F = [];
 tout_ = [];
 while current_time < MaxTime - 1e-3
@@ -358,7 +360,7 @@ end
         dq = y(8:14);
 
         Jr = Jh_RightToe_RightStance(q);
-        velr = Jr*dq
+        velr = Jr*dq;
         
         if abs(velr(1))>1e-2
             q_des(4:5) = q_des(4:5).*[1+0.05*velr(1);1+0.05*velr(1)];
