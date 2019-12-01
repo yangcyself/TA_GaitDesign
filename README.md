@@ -14,7 +14,8 @@ The PD controller with slippery correction vs. the normal PD controller. On a ri
 
 ### Controller
 
-### Friction simulation
+### Reaction Force simulation
+
 
 
 
@@ -44,13 +45,13 @@ The PD controller with slippery correction vs. the normal PD controller. On a ri
 
 
 
-
-
-## install 
+## install and run
 
 There are some cpp binaries that needs to be compiled in specific enviroments.
 
 Run the [compile.m](Utils\Dynamics\compile.m) in the Utils Dynamics directory and the [Compile.m](Step1.Gait_Library\gen\kinematics\Compile.m) in the step one directory to generate them.
+
+To see the result, simply run the [Sim_RABBIT_walking.m](./Step2.Walking_Controller/Sim_RABBIT_walking.m)
 
 # The old readme
 ## Leveraging the Template and Anchor Framework for Safe, Online Robotic Gait Design
