@@ -81,7 +81,6 @@ while current_time < MaxTime - 1e-3
     
     % calculate force
     last = length(Ext_F);
-    Ext_F = [Ext_F,zeros(2,length(tout))];
     
     if isempty(tout_)
         t_last = 0;
@@ -91,8 +90,8 @@ while current_time < MaxTime - 1e-3
     tout_ = [tout_;tout+t_last];
     for jj = 1:length(tout)
         [reactionF,isSliping] = Fyn(tout(jj),yout(jj,:)');
-        Ext_F(:,jj+last) = reactionF;
-        IsSlip = 
+        Ext_F= [Ext_F; reactionF' ];
+        IsSlip= [IsSlip; isSliping]; 
     end
     
     
@@ -218,22 +217,21 @@ end
 
 %% Plot the contact force profile
 
-slipind = abs(y_hist(:,8))>=1e-6;
 figure; 
 patch_x_start = [];
 patch_x_end = [];
 
-if(slipind(1))
+if(IsSlip(1))
     patch_x_start = [tout_(1),tout_(1)];
 end
 for ind = 2:size(tout_)
-    if(slipind(ind-1) && ~slipind(ind))
+    if(IsSlip(ind-1) && ~IsSlip(ind))
         patch_x_end = [patch_x_end;tout_(ind),tout_(ind)];
-    elseif (~slipind(ind-1) && slipind(ind))
+    elseif (~IsSlip(ind-1) && IsSlip(ind))
         patch_x_start = [patch_x_start;tout_(ind),tout_(ind)];
     end
 end
-if(slipind(end))
+if(IsSlip(end))
     patch_x_end = [patch_x_end;tout_(end),tout_(end)];
 end
 
@@ -241,9 +239,9 @@ assert(size(patch_x_end,1) == size(patch_x_start,1));
 patch_x = [patch_x_start,patch_x_end];
 patch_y = repmat([min(Ext_F(:)),max(Ext_F(:)),max(Ext_F(:)),min(Ext_F(:))],[size(patch_x_start,1),1]);
 
-patch(patch_x,patch_y,'g','FaceAlpha',.3);
+patch(patch_x',patch_y','g','FaceAlpha',.3);
 hold on;
-plot(tout_,Ext_F'); title('Force');
+plot(tout_,Ext_F',); title('Force');
 
 
 
