@@ -237,16 +237,17 @@ end
 
 assert(size(patch_x_end,1) == size(patch_x_start,1));
 patch_x = [patch_x_start,patch_x_end];
-patch_y = repmat([min(Ext_F(:)),max(Ext_F(:)),max(Ext_F(:)),min(Ext_F(:))],[size(patch_x_start,1),1]);
+patch_y = repmat(1.1*[min(Ext_F(:)),max(Ext_F(:)),max(Ext_F(:)),min(Ext_F(:))],[size(patch_x_start,1),1]);
 
 hold on;
 grid on
 box on
 patch(patch_x',patch_y','g','FaceAlpha',.3);
 
-plot(tout_,Ext_F','LineWidth',1); title('Force'); legend('f_x','f_y');
-xlabel("$t/s$",'interpreter','latex');ylabel("$Force/N$",'interpreter','latex');
-ylim([min(Ext_F(:)),max(Ext_F(:))]);
+plot(tout_,Ext_F','LineWidth',1); title('Force'); legend('Slip','$f_x$','$f_y$','interpreter','latex');
+xlabel("Time/$s$",'interpreter','latex');ylabel("Force/$N$",'interpreter','latex');
+ylim([min(Ext_F(:)),max(Ext_F(:))]*1.05);
+xlim([0,max(tout_)]*1.1);
 
 
 %% Plot trajectories & animation
