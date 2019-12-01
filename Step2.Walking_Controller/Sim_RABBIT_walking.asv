@@ -1,5 +1,5 @@
 function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot_flag )
-
+    close all;
 % ============================================
 % walking controller
 % 
@@ -19,7 +19,9 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.9;
+mu = 0.15;
+steps = 5;
+MaxTime = 10;
 %% If no IC is specified, pick one
 if nargin == 0
     
@@ -53,7 +55,7 @@ th_len_m = th_len_fit( km(:) );
 %% Setup simulation
 y0 = [ q0; dq0 ];
 
-MaxTime = 5;
+
 Dyn = @( t, y ) SecondOrderODE( y, PD_controller( t, y ) );
 Fyn = @( t, y ) F_ext( y, PD_controller( t, y ) );
 % Integrate ODE forward
@@ -68,8 +70,9 @@ s0 = Find_s0( y0 );
 
 Ntrans = 0;     % number of transitions
 err = 0;
-steps = 5;
+
 Ext_F = [];
+IsSlip = [];
 tout_ = [];
 while current_time < MaxTime - 1e-3
     
@@ -87,7 +90,9 @@ while current_time < MaxTime - 1e-3
     end
     tout_ = [tout_;tout+t_last];
     for jj = 1:length(tout)
-        Ext_F(:,jj+last) = Fyn(tout(jj),yout(jj,:)');
+        [reactionF,isSliping] = Fyn(tout(jj),yout(jj,:)');
+        Ext_F(:,jj+last) = reactionF;
+        IsSlip = 
     end
     
     
@@ -118,19 +123,6 @@ while current_time < MaxTime - 1e-3
 %                         break;
                     end
                     y0 = ResetMap( yout(end,:).' );
-                    
-%                     if (y0(3)+y0(4)+y0(5)/2 > pi)
-%                         err = 3;
-%                         [tout, yout, ie] = Sim_RABBIT_route4_PD_v2_untilfail( y0(1:7), y0(8:14), p1, p2 );
-%                         Ntrans = Ntrans + 1;
-%                         info(Ntrans).time = tout + current_time;
-%                         info(Ntrans).state = yout;
-%                         info(Ntrans).ie = ie;
-%                         info(Ntrans).k = [p1, p2];
-%                         t_hist = [t_hist; info(Ntrans).time];
-%                         y_hist = [y_hist; info(Ntrans).state];
-%                         break;
-%                     end
                     if (p_foot2(1) > p2 + 0.05)
                         err = 1;
                     elseif (p_foot2(1) < p2 - 0.05)
@@ -158,14 +150,44 @@ while current_time < MaxTime - 1e-3
             end
         case 2      % either 2-MSFW, 4-BW, 5-FW, or others
             switch ie
+                case 1 % the robot contacted the ground again
+                    [ p_foot2 ] = Joint2LeftToePos( yout(end,3:7).', params );
+                    if (p_foot2(1) < 0)
+                        err = 4;
+%                         break;
+                    end
+                    y0 = ResetMap( yout(end,:).' );
+                    s0 = Find_s0( y0 );
+                    steps = steps -1;
+                    if(steps <=0);
+                        break;
+                    end
+                    Ntrans = 0;
                 case 2
                     y0 = yout(end,:).';
                 case 4
                     err = 4;
-                    
                     break;
                 case 5
                     err = 5;
+                    break;
+                case 6 
+                    % the robot is about the stand on two foots. Lock the q
+                    % and only change the x to make the robot slip for a
+                    % distance.
+                    % This is just for a better visual effect, not strict
+                    % simulation
+                    options = odeset('Events', @doubleFootEvtFunc, 'RelTol', 1e-7, 'AbsTol', 1e-7 );
+                    [tout,yout,te,ye,ie] = ode45(doubleFootDyn,[0,5],y0,options); 
+                    Ntrans = Ntrans + 1;
+                    info(Ntrans).time = tout + current_time;
+                    info(Ntrans).state = yout;
+                    info(Ntrans).ie = ie;
+                    info(Ntrans).k = [p1, p2];
+
+                    t_hist = [t_hist; info(Ntrans).time];
+                    y_hist = [y_hist; info(Ntrans).state];
+                    current_time = tout(end)+current_time;
                     break;
                 otherwise
                     err = 8;
@@ -194,11 +216,41 @@ while current_time < MaxTime - 1e-3
     
 end
 
+%% Plot the contact force profile
+
+slipind = abs(y_hist(:,8))>=1e-6;
+figure; 
+patch_x_start = [];
+patch_x_end = [];
+
+if(slipind(1))
+    patch_x_start = [tout_(1),tout_(1)];
+end
+for ind = 2:size(tout_)
+    if(slipind(ind-1) && ~slipind(ind))
+        patch_x_end = [patch_x_end;tout_(ind),tout_(ind)];
+    elseif (~slipind(ind-1) && slipind(ind))
+        patch_x_start = [patch_x_start;tout_(ind),tout_(ind)];
+    end
+end
+if(slipind(end))
+    patch_x_end = [patch_x_end;tout_(end),tout_(end)];
+end
+
+assert(size(patch_x_end,1) == size(patch_x_start,1));
+patch_x = [patch_x_start,patch_x_end];
+patch_y = repmat([min(Ext_F(:)),max(Ext_F(:)),max(Ext_F(:)),min(Ext_F(:))],[size(patch_x_start,1),1]);
+
+patch(patch_x,patch_y,'g','FaceAlpha',.3);
+hold on;
+plot(tout_,Ext_F'); title('Force');
+
+
 
 %% Plot trajectories & animation
 
 PlotTraj();
-figure; plot(tout_,Ext_F'); title('Force')
+
 if plot_flag == 1
     Animate();
 %     PlotTraj;
@@ -227,12 +279,8 @@ end
         gc_dp = J*dq;
         gc_ddp = J*ddq+dJ*dq;
         Pright = p_RightToe(q);
-        while( ~(Pright(3)>1e-6 || gc_ddp(2)>0 ))
-            ddq = ddq - 5*gc_ddp(2)*J(2,:)'; % force the rigid constraint
-            gc_ddp = J*ddq+dJ*dq;
-            Pright = p_RightToe(q);
-            assert(Pright(3)>1e-3 || gc_ddp(2)>0) % assert the rigid model
-        end
+        count = 1;
+
         dydt = [ dq; ddq ];
     end
 
@@ -268,22 +316,39 @@ end
             q(3) + q(4) + q(5)/2 - pi               % mid-stance, backward
             dq(3) + dq(4) + dq(5)/2                 % dth = 0
             q(3) + q(4) + q(5)/2 - 3*pi/2           % forward
-%             stanceP(3) - 1e-4                       % The lift-up of the support leg
+            swingP(3) + 1e-2                        % The slacked touch-down, 
+                                                    %  This will happen
+                                                    %  when the robot is
+                                                    %  about to stand on
+                                                    %  two foots.
 %             stanceP(3) - 1e-4                       % The touch-down of stance foot
             ];
         
-%         if (t < 1e-3)
-        if (t < 0.05)
-            value = nan(5,1);
+        if (t < 1e-10)
+%         if (t < 0.05)
+            value = nan(6,1);
         end
-        if (false || t < 1e-2) % !!
+        if (true || t < 1e-2) % !!
             value(4) = nan;
         end
         if (q(3) + q(4) + q(5)/2 < pi)
             value(4) = nan;
         end
-        isterminal = ones( 5, 1 );
-        direction = [ -1; 1; -1; -1; 1 ];%1;-1];
+        isterminal = ones( 6, 1 );
+        direction = [ -1; 1; -1; -1; 1;-1 ];
+    end
+
+    function [value, isterminal, direction] = doubleFootEvtFunc( t, y )
+        q = y(1:7);
+        dq = y(8:end);
+        value = dq(1);
+        isterminal = 1;
+        direction = 0; 
+    end
+
+    function [dydt] = doubleFootDyn(t,y)
+        dq = y(8:end);
+        dydt = [dq; -sign(dq(1))*mu; zeros(6,1)];
     end
 
     function s0 = Find_s0( y )
@@ -337,14 +402,22 @@ end
     
     function [u] = PD_controller( ~, y )
         [ q_des, dq_des ] = FindRefTraj( y );
-        
+        t = t;
         % PD
         q = y(1:7);
         dq = y(8:14);
+
+        Jr = Jh_RightToe_RightStance(q);
+        velr = Jr*dq;
         
-        % Kp 50 Kd 0.05 -> »ØÍË
-        Kp = 100 *[ 10; 1; 10; 1 ];
-        Kd = 0.1 * [ 100; 10; 100; 10 ];
+        if abs(velr(1))>1e-2
+            q_des(4:5) = q_des(4:5).*[1+0.05*velr(1);1+0.05*velr(1)];
+            dq_des(4:5) = dq_des(4:5).*[1+0.02*velr(1);1+0.02*velr(1)];
+        end
+        % Kp 50 Kd 0.05 -> step back
+        % 105 0.5 works better than 50 0.05
+        Kp = 105 *[ 10; 1; 10; 1 ];
+        Kd = 0.6 * [ 100; 10; 100; 10 ];
         u_pd = -Kp .* (q(4:end)-q_des(2:end)) - Kd .* (dq(4:end) - dq_des(2:end));
         
         % controller offset
@@ -437,7 +510,7 @@ end
         conGUI.anim = anim;
     end
 
-    function [reF] = F_ext( y, tau )
+    function [reF,isSliping] = F_ext( y, tau )
         q   = y(1:7);
         dq  = y(8:14);
         M   = rabbit.calcMassMatrix( q );
@@ -471,12 +544,6 @@ end
             % solve for the new equition
             reFdir = sign(reF(1)); % 
             sol = solve_slip(M,F,B,J,dJ,tau,dq,reFdir,mu);
-            if(sol(9) * sol_(9)<0)
-                aaaaa = 1; % in this case, assume the solve_slip is correct, and make the force to zero
-            end
-            if(sol(8) * sol_(8)<0)
-               caocaocao = 1; 
-            end
             ddq = sol(1:7);
         end
         
@@ -489,8 +556,9 @@ end
         
         reF(2) = max(0,reF(2));
         reF(1) = max(min(mu*reF(2),reF(1)),-mu*reF(2));
-        if (Pright(3) >1e-2)
+        if (Pright(3) >1e-5)
            reF = 0*reF; 
         end
+        isSliping = abs(gc_dp(1))>1e-6 ;
     end
 end

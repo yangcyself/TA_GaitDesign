@@ -2,7 +2,6 @@
 
 ## experiments
 
-
 |  $\mu$  | their controller|their result | our controller | our result
 | ---- | ---- | ---- | ---- | ---- |
 | 0.55 |  105, 0.6|   |   0.05,0.02  |yes 5/5|
@@ -24,6 +23,13 @@
 | 0.55 |  105, 0.6|   |   0.05,0.02  |yes 5/5|
 | 0.25 |  105, 0.6|   |   0.05,0.02  |yes 15/15|
 | 0.15 |  105, 0.6|   |   0.05,0.02  |walk long double stand 3/5|
+
+
+## Implementation
+
+### con
+
+
 
 
 

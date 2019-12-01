@@ -19,8 +19,8 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 params = GenParams_RABBIT;
 rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.25;
-steps = 20;
+mu = 0.15;
+steps = 5;
 MaxTime = 10;
 %% If no IC is specified, pick one
 if nargin == 0
@@ -72,6 +72,7 @@ Ntrans = 0;     % number of transitions
 err = 0;
 
 Ext_F = [];
+IsSlip = [];
 tout_ = [];
 while current_time < MaxTime - 1e-3
     
@@ -80,7 +81,6 @@ while current_time < MaxTime - 1e-3
     
     % calculate force
     last = length(Ext_F);
-    Ext_F = [Ext_F,zeros(2,length(tout))];
     
     if isempty(tout_)
         t_last = 0;
@@ -89,7 +89,9 @@ while current_time < MaxTime - 1e-3
     end
     tout_ = [tout_;tout+t_last];
     for jj = 1:length(tout)
-        Ext_F(:,jj+last) = Fyn(tout(jj),yout(jj,:)');
+        [reactionF,isSliping] = Fyn(tout(jj),yout(jj,:)');
+        Ext_F= [Ext_F; reactionF' ];
+        IsSlip= [IsSlip; isSliping]; 
     end
     
     
@@ -164,10 +166,27 @@ while current_time < MaxTime - 1e-3
                     y0 = yout(end,:).';
                 case 4
                     err = 4;
-                    
                     break;
                 case 5
                     err = 5;
+                    break;
+                case 6 
+                    % the robot is about the stand on two foots. Lock the q
+                    % and only change the x to make the robot slip for a
+                    % distance.
+                    % This is just for a better visual effect, not strict
+                    % simulation
+                    options = odeset('Events', @doubleFootEvtFunc, 'RelTol', 1e-7, 'AbsTol', 1e-7 );
+                    [tout,yout,te,ye,ie] = ode45(doubleFootDyn,[0,5],y0,options); 
+                    Ntrans = Ntrans + 1;
+                    info(Ntrans).time = tout + current_time;
+                    info(Ntrans).state = yout;
+                    info(Ntrans).ie = ie;
+                    info(Ntrans).k = [p1, p2];
+
+                    t_hist = [t_hist; info(Ntrans).time];
+                    y_hist = [y_hist; info(Ntrans).state];
+                    current_time = tout(end)+current_time;
                     break;
                 otherwise
                     err = 8;
@@ -196,11 +215,40 @@ while current_time < MaxTime - 1e-3
     
 end
 
+%% Plot the contact force profile
+
+figure; 
+patch_x_start = [];
+patch_x_end = [];
+
+if(IsSlip(1))
+    patch_x_start = [tout_(1),tout_(1)];
+end
+for ind = 2:size(tout_)
+    if(IsSlip(ind-1) && ~IsSlip(ind))
+        patch_x_end = [patch_x_end;tout_(ind),tout_(ind)];
+    elseif (~IsSlip(ind-1) && IsSlip(ind))
+        patch_x_start = [patch_x_start;tout_(ind),tout_(ind)];
+    end
+end
+if(IsSlip(end))
+    patch_x_end = [patch_x_end;tout_(end),tout_(end)];
+end
+
+assert(size(patch_x_end,1) == size(patch_x_start,1));
+patch_x = [patch_x_start,patch_x_end];
+patch_y = repmat([min(Ext_F(:)),max(Ext_F(:)),max(Ext_F(:)),min(Ext_F(:))],[size(patch_x_start,1),1]);
+
+patch(patch_x,patch_y,'g','FaceAlpha',.3);
+hold on;
+plot(tout_,Ext_F'); title('Force');
+
+
 
 %% Plot trajectories & animation
 
 PlotTraj();
-figure; plot(tout_,Ext_F'); title('Force')
+
 if plot_flag == 1
     Animate();
 %     PlotTraj;
@@ -266,13 +314,17 @@ end
             q(3) + q(4) + q(5)/2 - pi               % mid-stance, backward
             dq(3) + dq(4) + dq(5)/2                 % dth = 0
             q(3) + q(4) + q(5)/2 - 3*pi/2           % forward
-%             stanceP(3) - 1e-4                       % The lift-up of the support leg
+            swingP(3) + 1e-2                        % The slacked touch-down, 
+                                                    %  This will happen
+                                                    %  when the robot is
+                                                    %  about to stand on
+                                                    %  two foots.
 %             stanceP(3) - 1e-4                       % The touch-down of stance foot
             ];
         
-        if (t < 1e-3)
+        if (t < 1e-10)
 %         if (t < 0.05)
-            value = nan(5,1);
+            value = nan(6,1);
         end
         if (true || t < 1e-2) % !!
             value(4) = nan;
@@ -280,8 +332,21 @@ end
         if (q(3) + q(4) + q(5)/2 < pi)
             value(4) = nan;
         end
-        isterminal = ones( 5, 1 );
-        direction = [ -1; 1; -1; -1; 1 ];%1;-1];
+        isterminal = ones( 6, 1 );
+        direction = [ -1; 1; -1; -1; 1;-1 ];
+    end
+
+    function [value, isterminal, direction] = doubleFootEvtFunc( t, y )
+        q = y(1:7);
+        dq = y(8:end);
+        value = dq(1);
+        isterminal = 1;
+        direction = 0; 
+    end
+
+    function [dydt] = doubleFootDyn(t,y)
+        dq = y(8:end);
+        dydt = [dq; -sign(dq(1))*mu; zeros(6,1)];
     end
 
     function s0 = Find_s0( y )
@@ -443,7 +508,7 @@ end
         conGUI.anim = anim;
     end
 
-    function [reF] = F_ext( y, tau )
+    function [reF,isSliping] = F_ext( y, tau )
         q   = y(1:7);
         dq  = y(8:14);
         M   = rabbit.calcMassMatrix( q );
@@ -492,5 +557,6 @@ end
         if (Pright(3) >1e-5)
            reF = 0*reF; 
         end
+        isSliping = abs(gc_dp(1))>1e-6 ;
     end
 end
