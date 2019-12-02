@@ -7,6 +7,7 @@
 > [Chenran Li](https://github.com/chenran-li)   
 
 ![](./pics/compare_mu0.25.gif)
+
 The PD controller with slippery correction vs. the normal PD controller. On a rigid round with $\mu = 0.25$
 
 
@@ -16,7 +17,74 @@ The PD controller with slippery correction vs. the normal PD controller. On a ri
 
 ### Reaction Force simulation
 
+We assume the [Coulomb model of friction](https://mech.subwiki.org/wiki/Coulomb_model_of_friction). There are two cases for simulation:
+- The reaction force is in the friction cone
+- The reaction force is on the friction cone
 
+Both are simulated by solving the dynamic model and rigid contact model together.
+
+The dynamic model is:
+$$
+M(q)\ddot{q} = F(q,\dot{q}) + G(q) + Bu + J^{T} \Gamma 
+$$
+
+#### The reaction force is in the friction cone
+
+This is the case of static friction, the constraint should be the fix of the ground contact point. As the reaction force $\Gamma$ is relatively second degree to this constraint, so the constaint we use is 
+
+$$
+\dot{(J\dot{q})} = \dot{J}\dot{q}+J\ddot{q} =0 
+$$
+
+Thus, we can simulate the dynamics and the reaction force together with the following equation
+
+$$
+\left[\begin{array}c 
+M & -J^{T} \\
+J & 0
+ \end{array}\right] 
+\left[\begin{array}c 
+\ddot{q}\\
+\Gamma 
+ \end{array}\right]
+ = 
+ \left[\begin{array}c 
+ G(q)+Bu\\
+ -\dot{J}\dot{q}
+  \end{array}\right] 
+$$
+
+#### The reaction force is on the friction cone
+
+When the ground contact point is sliding or the reaction force under the static friction assumption is outside of the friction cone, then the friction is saturated. 
+
+Then we assume that the $y$ direction of ground contact is fixed and the $sf_{x} = \mu f_{y}$. Where $s$ is the direction of the friction and $\mu$ is the friction coefficient.
+
+We can solve the equation below
+
+$$
+\left[\begin{array}c 
+M & -J^{T} \\
+(J)_{y}  & 0\\
+0 & 
+\begin{array}c s & -\mu  \end{array}
+ \end{array}\right] 
+\left[\begin{array}c 
+\ddot{q}\\
+\Gamma 
+ \end{array}\right]
+ = 
+ \left[\begin{array}c 
+ G(q)+Bu\\
+ (-\dot{J}\dot{q})_{y} \\
+ 0
+  \end{array}\right] 
+$$
+
+
+#### The unilateral constraint
+
+After computed one of the above cases, we have to check the unilateral constraint. If the $f_{y}<0$, we directly set $f=0$ and recompute the $\ddot{q}$
 
 
 ## experiments
@@ -30,7 +98,7 @@ The PD controller with slippery correction vs. the normal PD controller. On a ri
 | 0.10 |  105, 0.6|   |   0.05,0.02  |walk long double stand  5/5|
 | 0.05 |  105, 0.6|   |   0.05,0.02  |double stand 1/5|
 |      |      |      |
-> Their controller is the Kp and Kd, our controller is their Kp and Kd adding feedforward with $q$ and $dq\
+> Their controller is the Kp and Kd, our controller is their Kp and Kd adding feedforward with $q$ and $dq$\
 > The value in result is the amount of steps in experiment\
 > The above result is get under the condition that zero react force above 1e-2\
 > **Deparcated**
