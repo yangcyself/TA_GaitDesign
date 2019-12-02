@@ -1,10 +1,7 @@
 # Slip control
 
-> **Team member:**\
-> [Sangli Teng](https://github.com/SangliTeng) 
-> [Chenyu Yang](https://github.com/yangcyself) 
-> [Jiaxuan Yang](https://github.com/jiaxuanyang520) 
-> [Chenran Li](https://github.com/chenran-li)   
+> **Team member:**
+> [Sangli Teng](https://github.com/SangliTeng)  [Chenyu Yang](https://github.com/yangcyself)  [Jiaxuan Yang](https://github.com/jiaxuanyang520)  [Chenran Li](https://github.com/chenran-li)   
 
 ![](./pics/compare_mu0.25.gif)
 
@@ -14,6 +11,42 @@ The PD controller with slippery correction vs. the normal PD controller. On a ri
 ## Implementation
 
 ### Controller
+
+#### Normal PD controller
+
+Track the reference joint angle
+
+$$
+u_{P D}=-K_{P}\left(q-\hat{q}_{d e s}\right)-K_{D}\left(\dot{q}-\dot{\hat{q}}_{d e s}\right)
+$$
+
+#### ETH's method
+
+Add impedance
+
+$$
+u_{E T H}=u_{W B C, r e f}-K_{P}\left(q-\hat{q}_{d e s}\right)-K_{D}\left(\dot{q}-\dot{\hat{q}}_{d e s}\right)
+$$
+
+Where WBC: Whole Body Controller and the $\hat{q}_{d e s} \dot{\hat{q}}_{d e s}$ comes from gait library or WBC
+
+#### our method
+
+When the stance leg slips, we want to “drag” it to the original desired place. 
+
+The “drag force” is proportional to the toe slip velocity. 
+
+We modify the reference trajectory for stance leg to cause “drag force”. 
+
+$$
+q_{\text {des}, s t}=\hat{q}_{\text {des}, s t}+K_{P}^{f f d} v_{\text {toe}, x}
+$$
+$$
+\dot{q}_{d e s, s t}=\dot{\hat{q}}_{d e s, s t}+K_{D}^{f f d} v_{t o e, x}
+$$
+$$
+u=-K_{P}\left(q-q_{d e s}\right)-K_{D}\left(\dot{q}-\dot{q}_{d e s}\right)
+$$
 
 ### Reaction Force simulation
 
@@ -30,7 +63,7 @@ $$
 
 #### The reaction force is in the friction cone
 
-This is the case of static friction, the constraint should be the fix of the ground contact point. As the reaction force $\Gamma$ is relatively second degree to this constraint, so the constaint we use is 
+This is the case of static friction, the constraint should be the fix of the ground contact point. As the reaction force $\Gamma$ is relatively second degree to this constraint, so the constraint we use is 
 
 $$
 \dot{(J\dot{q})} = \dot{J}\dot{q}+J\ddot{q} =0 
@@ -84,7 +117,7 @@ $$
 
 #### The unilateral constraint
 
-After computed one of the above cases, we have to check the unilateral constraint. If the $f_{y}<0$, we directly set $f=0$ and recompute the $\ddot{q}$
+After computed one of the above cases, we have to check the unilateral constraint. If the $f_{y}<0$, we directly set $f=0$ and recomputed the $\ddot{q}$
 
 
 ## experiments
@@ -101,7 +134,7 @@ After computed one of the above cases, we have to check the unilateral constrain
 > Their controller is the Kp and Kd, our controller is their Kp and Kd adding feedforward with $q$ and $dq$\
 > The value in result is the amount of steps in experiment\
 > The above result is get under the condition that zero react force above 1e-2\
-> **Deparcated**
+> Deprecated
 
 **changed the no-force height to 1e-5**
 
