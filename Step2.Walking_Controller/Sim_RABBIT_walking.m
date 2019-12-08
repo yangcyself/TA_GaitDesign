@@ -17,11 +17,12 @@ function [t_hist, y_hist, info, err] = Sim_RABBIT_walking( q0, dq0, p1, p2, plot
 
 %% Initialization
 params = GenParams_RABBIT;
-rabbit = RABBIT(which('five_link_walker.urdf'));
+% rabbit = RABBIT(which('five_link_walker.urdf'));
+rabbit = RABBIT(which('five_link_cheetah.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
-mu = 0.15;
+mu = 0.9;
 steps = 5;
-MaxTime = 10;
+MaxTime = 0.1;
 %% If no IC is specified, pick one
 if nargin == 0
     

@@ -116,7 +116,8 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
             
             % Define links
             obj.pH_RKnee = line([0,0],[pH(1) pRK(1)],[pH(3) pRK(3)]);
-            obj.pH_LKnee = line([0,0],[pH(1) pLK(1)],[pH(3) pLK(3)]);
+%             obj.pH_LKnee = line([0,0],[pH(1) pLK(1)],[pH(3) pLK(3)]);
+            obj.pH_LKnee = line([0,0],[pT(1) pLK(1)],[pT(3) pLK(3)]); % changed by ycy 2019-12-7
             obj.pRKnee_RFoot = line([0,0],[pRK(1) pR(1)],[pRK(3) pR(3)]);
             obj.pLKnee_LFoot = line([0,0],[pLK(1) pL(1)],[pLK(3) pL(3)]);
             obj.pHT = line([0,0],[pH(1) pT(1)],[pH(3) pT(3)]);
@@ -149,7 +150,8 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
             pL= p_LeftToe(q);
             
             set(obj.pH_RKnee,'YData',[pH(1) pRK(1)],'ZData',[pH(3) pRK(3)], 'XData',[0 0]);
-            set(obj.pH_LKnee,'YData',[pH(1) pLK(1)],'ZData',[pH(3) pLK(3)],'XData',[0 0]);
+%             set(obj.pH_LKnee,'YData',[pH(1) pLK(1)],'ZData',[pH(3) pLK(3)],'XData',[0 0]);
+            set(obj.pH_LKnee,'YData',[pT(1) pLK(1)],'ZData',[pT(3) pLK(3)],'XData',[0 0]);
             set(obj.pRKnee_RFoot,'YData',[pRK(1) pR(1)],'ZData',[pRK(3) pR(3)],'XData',[0 0]);
             set(obj.pLKnee_LFoot,'YData',[pLK(1) pL(1)],'ZData',[pLK(3) pL(3)],'XData',[0 0]);
             set(obj.pHT,'YData',[pH(1) pT(1)],'ZData',[pH(3) pT(3)],'XData',[0 0]);

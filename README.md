@@ -20,7 +20,7 @@ $$
 u_{P D}=-K_{P}\left(q-\hat{q}_{d e s}\right)-K_{D}\left(\dot{q}-\dot{\hat{q}}_{d e s}\right)
 $$
 
-#### ETH's method
+#### [ETH's method](https://ieeexplore.ieee.org/document/8772165)
 
 Add impedance
 
