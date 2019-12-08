@@ -3,7 +3,7 @@ cheetah.configureDynamics('DelayCoriolisSet',false);
 cur = pwd;
 export_path = fullfile(cur, 'gen/');
 
-cheetah.ExportKinematics([export_path,'kinematics/']);
+% cheetah.ExportKinematics([export_path,'kinematics/']);
 
 %% check the model
 % the parallel standing position
@@ -41,19 +41,23 @@ function [dydt] = SecondOrderODE( y, tau )
     M   = rabbit.calcMassMatrix( q );
     F   = rabbit.calcDriftVector( q, dq );
     B   = [zeros(3,4); 50 * eye(4)];
-    J   = Jh_RightToe_RightStance( q );
-    dJ  = dJh_RightToe_RightStance( q, dq );
+    rJ   = Jh_RightToe_RightStance( q );
+    rdJ  = dJh_RightToe_RightStance( q, dq );
+    lJ   = J_h_LeftToe_LeftStance( q );
+    ldJ  = dJ_h_L( q, dq );
     J(2,:)  = [];
     dJ(2,:) = [];
 
-    reF = F_ext(y,tau);
+    Mat = [ M, -J.';
+            J, zeros(2) ];
+    vec = [ F + B*tau
+            -dJ * dq ];
 
-    ddq = M\(F+B*tau + J.'*reF); % solve again the dynamics under the saturated force
-    gc_dp = J*dq;
-    gc_ddp = J*ddq+dJ*dq;
-    Pright = p_RightToe(q);
-    count = 1;
-
+    sol = Mat \ vec;
+    ddq = sol(1:7);
+    dydt = [ dq; ddq ];
+    
+    
     dydt = [ dq; ddq ];
 end
 
