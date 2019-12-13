@@ -1,3 +1,4 @@
+global y0 ball cheetah;
 cheetah = RABBIT(which('five_link_cheetah.urdf'));
 cheetah.configureDynamics('DelayCoriolisSet',false);
 cur = pwd;
@@ -7,64 +8,165 @@ export_path = fullfile(cur, 'gen/');
 
 %% check the model
 % the parallel standing position
-y0 = [0.0002
-    0.7754
-    pi/2 %0.2033 
-    
-    2.6898 - (pi/2 -0.2033)
-    0.4973
+% y0 = [0.0002
+%     0.7754
+%     pi/2 %0.2033 
+%     2.6898 - (pi/2 -0.2033)
+%     0.4973
 %     2.5432
 %     1.1158
-    2.6898 - (pi/2 -0.2033)
-    0.4973
-    
-    0.5605
-   -0.0008
-    0.0243
-    0.6951
-    0.0070
-   -1.6232
-    0.2042];
+%     2.6898 - (pi/2 -0.2033)
+%     0.4973
+%     0.5605
+%    -0.0008
+%     0.0243
+%     0.6951
+%     0.0070
+%    -1.6232
+%     0.2042];
 
-t_hist = 0:0.1:1;
-y_hist = repmat(y0.',size(t_hist,2),1);
+% the standard standing y0
+ome = 0.5;
+y0 = [0; 0.40+0.63*sin(pi/3)+0.63; pi/2;  pi/6; 2*pi/3;  pi/6; 2*pi/3;  0;
+%       0; ome*ball.R              ; 0   ;  0   ; 0     ;  0   ; 0    ;   ome]; % this is wrong
+      0; 0                       ; 0   ;  0   ; 0     ;  0   ; 0    ;   0]; % the state of the PID
+% Rotate the init position a little value
+init_th = pi/15; % the threshold of forward and backward is pi/20-pi/10 
+rotM = rotx(init_th);
+rotM = rotM(2:3,2:3);
+xytmp = [0.5*ball.R;ball.R];
+y0(1:2) = rotM*(y0(1:2) - xytmp)+xytmp;
+y0(1) = y0(1) + ball.R*init_th;
+y0(3) = y0(3)+init_th;
+y0(8) = y0(8)+init_th;
 
+% just copy the initvalue to see the position of joints
+% t_hist = 0:0.1:1;
+% y_hist = repmat(y0.',size(t_hist,2),1);
 
+% Dyn = @(t,y)SecondOrderODE(y,pd_still(t,y));
+Dyn = @(t,y)SecondOrderODE(y,force_control_body(t,y));
 
+[t_hist,y_hist] = ode45(Dyn,[0,5],y0);
 
 Animate(t_hist,y_hist);
 
-function [dydt] = SecondOrderODE( y, tau )
+
+%% Generate the ball config
+ball.R = 0.63;
+ball.M = 12;
+ball.I = 1.5*ball.M*ball.R^2; % I taking the gc as the axis and assume the ball is a even disc
+
+
+
+function tau = pd_still(t,y)
+% calculate the tau with a simple PD controller to enforce the angle of the
+% joints
+    global y0;
     q   = y(1:7);
-    dq  = y(8:14);
+    dq  = y(9:15);
+    q_des = y0(1:7);
+    dq_des = y0(9:15);
+    
+    q_diff = q_des - q;
+    dq_diff = dq_des - dq;
+    
+    pact = q_diff([4,5,6,7]);
+    dpact = dq_diff([4,5,6,7]);
+    
+    tau = 50*pact + 20*dpact;
+end
 
-    M   = rabbit.calcMassMatrix( q );
-    F   = rabbit.calcDriftVector( q, dq );
+function tau = force_control_body(t,y)
+    global y0;
+    Mass = 32 - 10;
+    Mass = 0;
+    G = [0;Mass*9.8;0];
+    Kxp = -100;
+    Kxd = -60;
+    Ktp = -100;
+    Ktd = -30;
+    qdes = y0(1:8);
+    q   = y(1:7);
+    th = y(8);
+    dth = y(16);
+    qdes(1) = qdes(1) - 0.3*atan(dth) - 0.15*atan(th);
+    dq  = y(9:15);
+    
+    Wrench = [Kxp * (q(1:2) - qdes(1:2)) ;Ktp*(q(3)-qdes(3))] + G;
+    Wrench = Wrench + [Kxd * (dq(1:2));Ktd * (dq(3))];
+    
+ 
+    pToes = [auto_p_frontToe(q),auto_p_backToe(q)];
+    p_body = q(1:2)+0.5*0.63*[sin(q(3));cos(q(3))];
+    pToes = pToes - repmat(p_body,1,2);
+    
+    Mcross = cross([pToes(:,reshape(repmat(1:2,2,1),1,[]) ); zeros(1,4)],...
+            [repmat(eye(2),1,2);zeros(1,4) ]);
+    
+    Gmap = [repmat(eye(2),1,2);-Mcross(3,:)]; % need a neg here, from experience
+    Fc = pinv(Gmap)*Wrench;
+    J_gc = [auto_J_frontToe(q);auto_J_backToe(q)];
+    J_gc = J_gc(:,4:end);
+    tau =  -J_gc'*Fc;
+end
+
+
+function [dydt] = SecondOrderODE( y, tau )
+    global cheetah ball;
+    q   = y(1:7);
+    th = y(8);
+    dq  = y(9:15);
+    dth = y(16);
+
+    M   = cheetah.calcMassMatrix( q );
+    F   = cheetah.calcDriftVector( q, dq );
     B   = [zeros(3,4); 50 * eye(4)];
-    rJ   = Jh_RightToe_RightStance( q );
-    rdJ  = dJh_RightToe_RightStance( q, dq );
-    lJ   = J_h_LeftToe_LeftStance( q );
-    ldJ  = dJ_h_L( q, dq );
-    J(2,:)  = [];
-    dJ(2,:) = [];
-
-    Mat = [ M, -J.';
-            J, zeros(2) ];
-    vec = [ F + B*tau
-            -dJ * dq ];
-
+    % namig convention here: (J/dJ)_[bc_](f/b) _bc_ means whether is the
+    % ball contact point, f/b means front or back side
+    J_f = auto_J_frontToe(q);
+    J_b = auto_J_backToe(q);
+    dJ_f = auto_dJ_frontToe(q,dq);
+    dJ_b = auto_dJ_backToe(q,dq);
+    
+    J_bc_f = auto_J_bc_front(th);
+    dJ_bc_f = auto_dJ_bc_front(th,dth);
+    J_bc_b = auto_J_bc_back(th);
+    dJ_bc_b = auto_dJ_bc_back(th,dth);
+    
+    I = ball.I;
+    Mat = [ M, zeros(7,1),     -J_f.', -J_b.';
+            zeros(1,7), I, J_bc_f.', J_bc_b.';
+            -J_f, J_bc_f, zeros(2,4);
+            -J_b, J_bc_b, zeros(2,4) ];
+        
+    vec = [ F + B*tau;
+            0;
+            dJ_f*dq - dJ_bc_f*dth;
+            dJ_b*dq - dJ_bc_b*dth;];
     sol = Mat \ vec;
     ddq = sol(1:7);
-    dydt = [ dq; ddq ];
     
+%   on fixed ground
+%     Mat_ = [ M,        -J_f.', -J_b.';
+%             -J_f, zeros(2,4);
+%             -J_b, zeros(2,4) ];
+%         
+%     vec_ = [ F + B*tau;
+%             dJ_f*dq ;
+%             dJ_b*dq ;];
+%         
+%     sol_ = Mat_ \ vec_;
+%     ddq_ = sol_(1:7);
+    ddth = sol(8);
     
-    dydt = [ dq; ddq ];
+    dydt = [ dq; dth;ddq;ddth ];
 end
 
 function Animate(t_hist,y_hist)
     anim = MyAnimator.MyFiveLinkAnimator( [], ...
         't', t_hist, ...
-        'q', y_hist(:,1:7).', ...
+        'q', y_hist(:,[1:8]).', ...
         'text_flag', true );
     anim.pov = MyAnimator.AnimatorPointOfView.West;
     anim.Animate(true);

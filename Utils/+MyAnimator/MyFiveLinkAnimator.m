@@ -18,7 +18,8 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
         pRKnee_RFoot;
         pLKnee_LFoot;
         pHT;
-        
+        pBall
+
         h_text;
         
         starting_index;
@@ -102,8 +103,9 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
             obj.H = [Rx(th(1))*Ry(th(2))*Rz(th(3)), r; 0,0,0,1];
             
             % Initialization
-            q = obj.q_all(:,1);
-            
+            q = obj.q_all(1:7,1);
+            ball_th = obj.q_all(8,1);
+
             pH = [q(1);0;q(2)];
             pT = p_Torso(q);
             pRK = p_q2_right(q);
@@ -122,6 +124,11 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
             obj.pLKnee_LFoot = line([0,0],[pLK(1) pL(1)],[pLK(3) pL(3)]);
             obj.pHT = line([0,0],[pH(1) pT(1)],[pH(3) pT(3)]);
             
+            circ_n = 17;
+            circ_p = 0:2*pi/(circ_n-1):2*pi;
+            pBall = auto_p_ball(ball_th);
+            obj.pBall = line(zeros(1,circ_n), pBall(1)+0.63*cos(circ_p),pBall(2)+0.63*sin(circ_p));
+
             set(obj.pH_RKnee,'LineWidth',3,'Color',obj.leg1Color);
             set(obj.pH_LKnee,'LineWidth',3,'Color',obj.leg2Color);
             set(obj.pRKnee_RFoot,'LineWidth',3,'Color',obj.leg1Color);
@@ -140,8 +147,11 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
 %             if nargin < 4
 %                 text_flag = 1;
 %             end
-            q = x;                     
+            q = x(1:7);
+            ball_th = x(8);
 
+            shift = 2;
+            mymod = @(x,m) mod(x+0.5+shift,m)-0.5;
             pH = [q(1);0;q(2)];
             pT = p_Torso(q);
             pRK = p_q2_right(q);
@@ -149,13 +159,19 @@ classdef MyFiveLinkAnimator < MyAnimator.MyAbstractAnimator
             pR = p_RightToe(q);
             pL= p_LeftToe(q);
             
-            set(obj.pH_RKnee,'YData',[pH(1) pRK(1)],'ZData',[pH(3) pRK(3)], 'XData',[0 0]);
-%             set(obj.pH_LKnee,'YData',[pH(1) pLK(1)],'ZData',[pH(3) pLK(3)],'XData',[0 0]);
-            set(obj.pH_LKnee,'YData',[pT(1) pLK(1)],'ZData',[pT(3) pLK(3)],'XData',[0 0]);
-            set(obj.pRKnee_RFoot,'YData',[pRK(1) pR(1)],'ZData',[pRK(3) pR(3)],'XData',[0 0]);
-            set(obj.pLKnee_LFoot,'YData',[pLK(1) pL(1)],'ZData',[pLK(3) pL(3)],'XData',[0 0]);
-            set(obj.pHT,'YData',[pH(1) pT(1)],'ZData',[pH(3) pT(3)],'XData',[0 0]);
-            
+            set(obj.pH_RKnee,'YData',mymod([pH(1) pRK(1)],7.0),'ZData',[pH(3) pRK(3)], 'XData',[0 0]);
+%             set(obj.pH_LKnee,'YData',mymod([pH(1) pLK(1)],7.0),'ZData',[pH(3) pLK(3)],'XData',[0 0]);
+            set(obj.pH_LKnee,'YData',mymod([pT(1) pLK(1)],7.0),'ZData',[pT(3) pLK(3)],'XData',[0 0]);
+            set(obj.pRKnee_RFoot,'YData',mymod([pRK(1) pR(1)],7.0),'ZData',[pRK(3) pR(3)],'XData',[0 0]);
+            set(obj.pLKnee_LFoot,'YData',mymod([pLK(1) pL(1)],7.0),'ZData',[pLK(3) pL(3)],'XData',[0 0]);
+            set(obj.pHT,'YData',mymod([pH(1) pT(1)],7.0),'ZData',[pH(3) pT(3)],'XData',[0 0]);
+
+            circ_n = 17;
+            circ_p = 0:2*pi/(circ_n-1):2*pi;
+            p_Ball = auto_p_ball(ball_th);
+            set(obj.pBall,'YData',mymod(p_Ball(1)+0.63*cos(circ_p),7.0),'ZData',p_Ball(2)+0.63*sin(circ_p),'XData',zeros(1,circ_n));
+
+
 %             delete(obj.h_text);
             if obj.text_flag
 %                 obj.text = text(0,pH(1),pH(3)+1,['t = ',sprintf('%.2f',t)]);

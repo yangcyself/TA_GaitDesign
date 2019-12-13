@@ -5,3 +5,6 @@ README.md
 tmp.tex
 *.asv
 *.mexw64.pdb
+Step2.Walking_Controller/hw2.m
+Step2.Walking_Controller/LagrangianDynamics.m
+Step2.Walking_Controller/hw1.m
