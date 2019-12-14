@@ -2,7 +2,12 @@ global y0 ball cheetah;
 cheetah = RABBIT(which('five_link_cheetah.urdf'));
 cheetah.configureDynamics('DelayCoriolisSet',false);
 cur = pwd;
-export_path = fullfile(cur, 'gen/');
+% export_path = fullfile(cur, 'gen/');
+
+ball.R = 0.63;
+ball.M = 12;
+ball.I = 1.5*ball.M*ball.R^2; % I taking the gc as the axis and assume the ball is a even disc
+
 
 % cheetah.ExportKinematics([export_path,'kinematics/']);
 
@@ -26,12 +31,14 @@ export_path = fullfile(cur, 'gen/');
 %     0.2042];
 
 % the standard standing y0
+close all;
 ome = 0.5;
 y0 = [0; 0.40+0.63*sin(pi/3)+0.63; pi/2;  pi/6; 2*pi/3;  pi/6; 2*pi/3;  0;
 %       0; ome*ball.R              ; 0   ;  0   ; 0     ;  0   ; 0    ;   ome]; % this is wrong
       0; 0                       ; 0   ;  0   ; 0     ;  0   ; 0    ;   0]; % the state of the PID
 % Rotate the init position a little value
-init_th = pi/15; % the threshold of forward and backward is pi/20-pi/10 
+% init_th = pi/15; % the threshold of forward and backward is pi/20-pi/10 
+init_th = 0; % the threshold of forward and backward is pi/20-pi/10 
 rotM = rotx(init_th);
 rotM = rotM(2:3,2:3);
 xytmp = [0.5*ball.R;ball.R];
@@ -45,17 +52,23 @@ y0(8) = y0(8)+init_th;
 % y_hist = repmat(y0.',size(t_hist,2),1);
 
 % Dyn = @(t,y)SecondOrderODE(y,pd_still(t,y));
-Dyn = @(t,y)SecondOrderODE(y,force_control_body(t,y));
+% Dyn = @(t,y)SecondOrderODE(y,force_control_body(t,y));
+Dyn = @(t,y)SecondOrderODE(y,force_control_body_ball(t,y));
+% Dyn = @(t,y)SecondOrderODE(y,force_control_body_x(t,y));
 
 [t_hist,y_hist] = ode45(Dyn,[0,5],y0);
+taus = [];
+fgcs = [];
+for i=1:size(t_hist)
+    [~,tau,f_gc] = Dyn(t_hist(i),y_hist(i,:)');
+    taus = [taus,tau];
+    fgcs = [fgcs,f_gc];
+end
 
+figure;plot(taus');title('tau');legend('q4','q5','q6','q7');
+figure;plot(fgcs');title('Gc');legend('gcfx','gcfy','gcbx','gcby');
 Animate(t_hist,y_hist);
 
-
-%% Generate the ball config
-ball.R = 0.63;
-ball.M = 12;
-ball.I = 1.5*ball.M*ball.R^2; % I taking the gc as the axis and assume the ball is a even disc
 
 
 
@@ -77,11 +90,13 @@ function tau = pd_still(t,y)
     tau = 50*pact + 20*dpact;
 end
 
+
+
 function tau = force_control_body(t,y)
     global y0;
-    Mass = 32 - 10;
-    Mass = 0;
-    G = [0;Mass*9.8;0];
+%     Mass = 32;
+    Mass = 0; % with no upper feed forward the result is slighter better
+    G = [0;Mass*9.8/50;0]; % this 50 is the reduction of the motor (B)
     Kxp = -100;
     Kxd = -60;
     Ktp = -100;
@@ -105,6 +120,7 @@ function tau = force_control_body(t,y)
             [repmat(eye(2),1,2);zeros(1,4) ]);
     
     Gmap = [repmat(eye(2),1,2);-Mcross(3,:)]; % need a neg here, from experience
+    
     Fc = pinv(Gmap)*Wrench;
     J_gc = [auto_J_frontToe(q);auto_J_backToe(q)];
     J_gc = J_gc(:,4:end);
@@ -112,13 +128,120 @@ function tau = force_control_body(t,y)
 end
 
 
-function [dydt] = SecondOrderODE( y, tau )
+function tau = force_control_body_ball(t,y)
+    global y0;
+    Mass = 32-10;
+%     Mass = 0; % with no upper feed forward the result is slighter better
+    G = [0;Mass*9.8/50;0]; % this 50 is the reduction of the motor (B)
+    Kxp = -100;
+    Kxd = -20;
+    Ktp = -20;
+    Ktd = -5;
+    qdes = y0(1:8);
+    q   = y(1:7);
+    th = y(8);
+    dth = y(16);
+    qdes(1) = qdes(1) - 0.3*atan(dth) - 0.15*atan(th);
+    dq  = y(9:15);
+    
+    Wrench = [Kxp * (q(1:2) - qdes(1:2)) ;Ktp*(q(3)-qdes(3))] + G;
+    Wrench = Wrench + [Kxd * (dq(1:2));Ktd * (dq(3))];
+    
+ 
+    pToes = [auto_p_frontToe(q),auto_p_backToe(q)];
+    p_body = q(1:2)+0.5*0.63*[sin(q(3));cos(q(3))];
+    pToes = pToes - repmat(p_body,1,2);
+    
+    Mcross = cross([pToes(:,reshape(repmat(1:2,2,1),1,[]) ); zeros(1,4)],...
+            [repmat(eye(2),1,2);zeros(1,4) ]);
+    
+    Gmap = [repmat(eye(2),1,2);-Mcross(3,:)]; % need a neg here, from experience
+    
+    % augment the Wrench into the wrench of body, and the bal
+    Kthp = -50;
+    Kthd = -20;
+    Wrench(4) = Kthp*th+Kthd*dth;
+    J_bc_f = auto_J_bc_front(th);
+    J_bc_b = auto_J_bc_back(th);
+    G_bl_map = [-J_bc_f',-J_bc_b'];
+    Gmap = [Gmap;G_bl_map];
+    
+    % add L2 norm rather than pinv
+%     Fc = pinv(Gmap)*Wrench;
+    Fc = inv(Gmap'*Gmap+1e-14*eye(4))*Gmap'* Wrench;
+    J_gc = [auto_J_frontToe(q);auto_J_backToe(q)];
+    J_gc = J_gc(:,4:end);
+    tau =  -J_gc'*Fc;
+end
+
+
+
+function tau = force_control_body_x(t,y)
+% The contact force controller, but only constraint on the x-axis
+% Use Operational Space control, first priority is to makesure the x
+% position of the body, and the other priority is to control the rotation
+% of the ball
+    global y0;
+    global cheetah ball;
+    Mass = 32 - 10;
+%     Mass = 0;
+    G = [0;Mass*9.8;0];
+    Kxp = -100;
+    Kxd = -60;
+    Ktp = -30;
+    Ktd = -5;
+    Kthp = -50;
+    Kthd = -10;
+    qdes = y0(1:8);
+    q   = y(1:7);
+    th = y(8);
+    dth = y(16);
+    qdes(1) = qdes(1) - 0.3*atan(dth) - 0.15*atan(th);
+    dq  = y(9:15);
+    
+    M   = cheetah.calcMassMatrix( q );
+    J_x = [1,0,0,0,0,0,0];
+    Wrench = [Kxp * (q(1:2) - qdes(1:2)) ;Ktp*(q(3)-qdes(3))] + G;
+    Wrench = Wrench + [Kxd * (dq(1:2));Ktd * (dq(3))];
+    
+    pToes = [auto_p_frontToe(q),auto_p_backToe(q)];
+    p_body = q(1:2)+0.5*0.63*[sin(q(3));cos(q(3))];
+    pToes = pToes - repmat(p_body,1,2);
+    
+    Mcross = cross([pToes(:,reshape(repmat(1:2,2,1),1,[]) ); zeros(1,4)],...
+            [repmat(eye(2),1,2);zeros(1,4) ]);
+    Gmap = [repmat(eye(2),1,2);-Mcross(3,:)]; % need a neg here, from experience
+    Fc = pinv(Gmap)*Wrench;
+    
+    J_bc_f = auto_J_bc_front(th);
+    J_bc_b = auto_J_bc_back(th);
+    Wrench_ball = Kthp*th+Kthd*dth;
+    G_bl_map = [-J_bc_f',-J_bc_b'];
+    N_Gmap = eye(4) - pinv(Gmap)*Gmap;
+%     maxfactor = ;% make the factor still in the limit of +-30
+    Fc_z = pinv(G_bl_map*N_Gmap)*(Wrench_ball - G_bl_map*Fc);
+    Fc = Fc+N_Gmap*Fc_z;
+    % Here we let G_bl_map*(Fc+G_map_null*Fc_z) = Wrench_ball
+    
+    
+    J_gc = [auto_J_frontToe(q);auto_J_backToe(q)];
+    J_gc = J_gc(:,4:end);
+    tau =  -J_gc'*Fc;
+    % get only the projection of the x-axis
+end
+
+
+
+function [dydt,tau,f_gc] = SecondOrderODE( y, tau )
     global cheetah ball;
     q   = y(1:7);
     th = y(8);
     dq  = y(9:15);
     dth = y(16);
-
+    
+%     tau(tau>30) = 30;
+%     tau(tau<-30) = -30;
+    
     M   = cheetah.calcMassMatrix( q );
     F   = cheetah.calcDriftVector( q, dq );
     B   = [zeros(3,4); 50 * eye(4)];
@@ -159,8 +282,14 @@ function [dydt] = SecondOrderODE( y, tau )
 %     sol_ = Mat_ \ vec_;
 %     ddq_ = sol_(1:7);
     ddth = sol(8);
-    
+    f_gc = sol(9:12);
     dydt = [ dq; dth;ddq;ddth ];
+end
+
+function ShowThisFrame(y)
+    t_hist = 0:0.2:1;
+    y_hist = repmat(y.',size(t_hist,2),1);
+    Animate(t_hist,y_hist)
 end
 
 function Animate(t_hist,y_hist)
