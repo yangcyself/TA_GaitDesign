@@ -21,7 +21,7 @@ rabbit = RABBIT(which('five_link_walker.urdf'));
 rabbit.configureDynamics('DelayCoriolisSet',false);
 mu = 0.15;
 steps = 5;
-MaxTime = 10;
+MaxTime = 1;
 %% If no IC is specified, pick one
 if nargin == 0
     
@@ -171,22 +171,22 @@ while current_time < MaxTime - 1e-3
                     err = 5;
                     break;
                 case 6 
-                    % the robot is about the stand on two foots. Lock the q
-                    % and only change the x to make the robot slip for a
-                    % distance.
-                    % This is just for a better visual effect, not strict
-                    % simulation
-                    options = odeset('Events', @doubleFootEvtFunc, 'RelTol', 1e-7, 'AbsTol', 1e-7 );
-                    [tout,yout,te,ye,ie] = ode45(doubleFootDyn,[0,5],y0,options); 
-                    Ntrans = Ntrans + 1;
-                    info(Ntrans).time = tout + current_time;
-                    info(Ntrans).state = yout;
-                    info(Ntrans).ie = ie;
-                    info(Ntrans).k = [p1, p2];
-
-                    t_hist = [t_hist; info(Ntrans).time];
-                    y_hist = [y_hist; info(Ntrans).state];
-                    current_time = tout(end)+current_time;
+%                     % the robot is about the stand on two foots. Lock the q
+%                     % and only change the x to make the robot slip for a
+%                     % distance.
+%                     % This is just for a better visual effect, not strict
+%                     % simulation
+%                     options = odeset('Events', @doubleFootEvtFunc, 'RelTol', 1e-7, 'AbsTol', 1e-7 );
+%                     [tout,yout,te,ye,ie] = ode45(doubleFootDyn,[0,5],y0,options); 
+%                     Ntrans = Ntrans + 1;
+%                     info(Ntrans).time = tout + current_time;
+%                     info(Ntrans).state = yout;
+%                     info(Ntrans).ie = ie;
+%                     info(Ntrans).k = [p1, p2];
+% 
+%                     t_hist = [t_hist; info(Ntrans).time];
+%                     y_hist = [y_hist; info(Ntrans).state];
+%                     current_time = tout(end)+current_time;
                     break;
                 otherwise
                     err = 8;
