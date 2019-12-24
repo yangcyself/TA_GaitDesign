@@ -1,4 +1,4 @@
-global y0 ball cheetah;
+global y0 ball cheetah y_des;
 cheetah = RABBIT(which('five_link_cheetah.urdf'));
 cheetah.configureDynamics('DelayCoriolisSet',false);
 cur = pwd;
@@ -33,7 +33,8 @@ ball.I = 1.5*ball.M*ball.R^2; % I taking the gc as the axis and assume the ball 
 % the standard standing y0
 close all;
 ome = 0.5;
-y0 = [0; 0.40+0.63*sin(pi/3)+0.63; pi/2;  pi/6; 2*pi/3;  pi/6; 2*pi/3;  0;
+% y0 = [0; 0.40+0.63*sin(pi/3)+0.63; pi/2;  pi/6; 2*pi/3;  pi/6; 2*pi/3;  0;
+y0 = [0; 0.40+0.63*sin(pi/3)+0.63; pi/2;  5*pi/6; -2*pi/3;  pi/6; 2*pi/3;  0;
 %       0; ome*ball.R              ; 0   ;  0   ; 0     ;  0   ; 0    ;   ome]; % this is wrong
       0; 0                       ; 0   ;  0   ; 0     ;  0   ; 0    ;   0]; % the state of the PID
 % Rotate the init position a little value
@@ -46,17 +47,25 @@ y0(1:2) = rotM*(y0(1:2) - xytmp)+xytmp;
 y0(1) = y0(1) + ball.R*init_th;
 y0(3) = y0(3)+init_th;
 y0(8) = y0(8)+init_th;
-
+y_des = y0;
+% y_des = [ 0.5627; 1.5764; 1.8197; 0.5236; 2.0944; 0.5236; 2.0944; -0.2094; 0; 0; 0; 0; 0; 0; 0; 0];
+% x_optim = [-1.0516; 1.2881; 0.8596; 0.4246; 1.9682; 0.5932; 1.6503;-0.6186;-0.9377; 1.5904; 0.3720; 2.0296; 0.9205; 2.3749; 0.1154;-0.7634];
+% x_optim = [ 0; 1.5756; 1.5708; 0.5236; 2.0944; 0.5236; 2.0944;      0;      0; 1.5756; 1.5708; 0.5236; 2.0944; 0.5236; 2.0944;      0];
+x_optim = [y0(1:8);y0(1:8)];
+y_des = [x_optim(1:8);zeros(8,1)];
+y0 = [x_optim(9:16);zeros(8,1)];
 % just copy the initvalue to see the position of joints
 % t_hist = 0:0.1:1;
 % y_hist = repmat(y0.',size(t_hist,2),1);
 
 % Dyn = @(t,y)SecondOrderODE(y,pd_still(t,y));
 % Dyn = @(t,y)SecondOrderODE(y,force_control_body(t,y));
-Dyn = @(t,y)SecondOrderODE(y,force_control_body_ball(t,y));
+Dyn = @(t,y)SecondOrderODE(y,force_control_body_ball(t,y)); %Best
 % Dyn = @(t,y)SecondOrderODE(y,force_control_body_x(t,y));
 
 [t_hist,y_hist] = ode45(Dyn,[0,5],y0);
+
+
 taus = [];
 fgcs = [];
 for i=1:size(t_hist)
@@ -69,17 +78,85 @@ figure;plot(taus');title('tau');legend('q4','q5','q6','q7');
 figure;plot(fgcs');title('Gc');legend('gcfx','gcfy','gcbx','gcby');
 Animate(t_hist,y_hist);
 
+%% optimize for y_des
+    options = optimset('Diagnostics','on','display','iter','TolCon',1e-4,...
+        'MaxFunEvals',20000,'MaxIter',30000); 
+    Aineq=[];Bineq=[];Aeq=[];Beq=[];LB=[];UB=[];
+    % add the constraint that the time is ordered;
+    [x_optim,obj_optim] = fmincon(@pos_obj,[y0(1:8);y0(1:8)],Aineq,Bineq,Aeq,Beq,LB,UB, @pos_cons ,options);
+
+function [cineq, ceq] = pos_cons(y)
+    y_des = y(1:8);
+    y0 = y(9:16);
+    cineq = [];
+    ceq = [
+        auto_p_frontToe(y0(1:7)) - auto_pc_front(y0(8));
+        auto_p_backToe(y0(1:7)) - auto_pc_back(y0(8));
+        auto_p_frontToe(y_des(1:7)) - auto_pc_front(y_des(8));
+        auto_p_backToe(y_des(1:7)) - auto_pc_back(y_des(8));
+    ];
+    
+end
+
+
+function objcost = pos_obj(y)
+    global y_des y0;
+    y_des = [y(1:8);zeros(8,1)];
+    y0 = [y(9:16);zeros(8,1)];
+    time_flag = now;
+    options = odeset('OutputFcn',@myOutputFcn,'Events',@myEventsFcn);
+    Dyn = @(t,y)SecondOrderODE(y,force_control_body_ball(t,y));
+    [t_hist,y_hist] = ode45(Dyn,[0,5],y0,options);
+    if(t_hist(end)<4.9)
+        objcost = 1e20;
+        return
+    end
+    taus = [];
+    fgcs = [];
+    for i=1:size(t_hist)
+        [~,tau,f_gc] = Dyn(t_hist(i),y_hist(i,:)');
+        taus = [taus,tau];
+        fgcs = [fgcs,f_gc];
+    end
+    tausNorm = vecnorm(taus);
+%     objcost = trapz(t_hist,tausNorm);
+    objcost = log(max(tausNorm));
+    
+    function status = myOutputFcn(t,y,flag)
+        if(strcmp(flag,'init'))
+            time_flag = now;
+            status = 0;
+        elseif(strcmp(flag,'done'))
+%             disp('used time');
+%             disp(now-time_flag);
+        else 
+            status = 0;
+            if(now - time_flag > 0.001)
+                status = 1;
+            elseif(y(2)<1.26)
+%                 disp('too low');
+                status = 1;
+            end
+        end
+    end
+    function [value,isterminal,direction] = myEventsFcn(t,y)
+        value = y(2)-1.26;
+        isterminal = 1;
+        direction = -1;
+    end
+end
+
 
 
 
 function tau = pd_still(t,y)
 % calculate the tau with a simple PD controller to enforce the angle of the
 % joints
-    global y0;
+    global y_des;
     q   = y(1:7);
     dq  = y(9:15);
-    q_des = y0(1:7);
-    dq_des = y0(9:15);
+    q_des = y_des(1:7);
+    dq_des = y_des(9:15);
     
     q_diff = q_des - q;
     dq_diff = dq_des - dq;
@@ -129,7 +206,7 @@ end
 
 
 function tau = force_control_body_ball(t,y)
-    global y0;
+    global y_des;
     Mass = 32-10;
 %     Mass = 0; % with no upper feed forward the result is slighter better
     G = [0;Mass*9.8/50;0]; % this 50 is the reduction of the motor (B)
@@ -137,11 +214,11 @@ function tau = force_control_body_ball(t,y)
     Kxd = -20;
     Ktp = -20;
     Ktd = -5;
-    qdes = y0(1:8);
+    qdes = y_des(1:8);
     q   = y(1:7);
     th = y(8);
     dth = y(16);
-    qdes(1) = qdes(1) - 0.3*atan(dth) - 0.15*atan(th);
+%     qdes(1) = qdes(1) - 0.3*atan(dth) - 0.15*atan(th);
     dq  = y(9:15);
     
     Wrench = [Kxp * (q(1:2) - qdes(1:2)) ;Ktp*(q(3)-qdes(3))] + G;
@@ -168,7 +245,13 @@ function tau = force_control_body_ball(t,y)
     
     % add L2 norm rather than pinv
 %     Fc = pinv(Gmap)*Wrench;
-    Fc = inv(Gmap'*Gmap+1e-14*eye(4))*Gmap'* Wrench;
+%     Gmap(3,:) = [];
+%     Wrench(3,:) = [];
+    LSweight = diag([1,1,cond(G)^(-0.2),1]);
+
+    Gmap = LSweight * Gmap;
+    Wrench = LSweight * Wrench;
+    Fc = inv(Gmap'*Gmap+1e-6*eye(4))*Gmap'* Wrench;
     J_gc = [auto_J_frontToe(q);auto_J_backToe(q)];
     J_gc = J_gc(:,4:end);
     tau =  -J_gc'*Fc;
@@ -181,7 +264,7 @@ function tau = force_control_body_x(t,y)
 % Use Operational Space control, first priority is to makesure the x
 % position of the body, and the other priority is to control the rotation
 % of the ball
-    global y0;
+    global y_des;
     global cheetah ball;
     Mass = 32 - 10;
 %     Mass = 0;
@@ -192,7 +275,7 @@ function tau = force_control_body_x(t,y)
     Ktd = -5;
     Kthp = -50;
     Kthd = -10;
-    qdes = y0(1:8);
+    qdes = y_des(1:8);
     q   = y(1:7);
     th = y(8);
     dth = y(16);
