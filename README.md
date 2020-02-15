@@ -3,7 +3,7 @@
 > **Team member:**
 > [Sangli Teng](https://github.com/SangliTeng)  [Chenyu Yang](https://github.com/yangcyself)  [Jiaxuan Yang](https://github.com/jiaxuanyang520)  [Chenran Li](https://github.com/chenran-li)   
 
-![](./pics/compare_mu0.25.gif)
+![](pics/compare_mu0.25.gif)
 
 The PD controller with slippery correction vs. the normal PD controller. On a rigid round with $\mu = 0.25$
 
